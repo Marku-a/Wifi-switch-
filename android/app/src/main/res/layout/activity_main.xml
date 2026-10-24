@@ -4,71 +4,112 @@
     android:layout_height="match_parent"
     android:fillViewport="true">
 
-    <LinearLayout
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_horizontal"
-        android:orientation="vertical"
-        android:padding="24dp">
+        android:layout_height="wrap_content">
 
-        <View
-            android:id="@+id/statusDot"
-            android:layout_width="160dp"
-            android:layout_height="160dp"
-            android:layout_marginTop="24dp" />
-
-        <TextView
-            android:id="@+id/statusText"
+        <!-- Unpaired mode -->
+        <LinearLayout
+            android:id="@+id/unpairedGroup"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:gravity="center"
-            android:text="…"
-            android:textSize="24sp" />
+            android:orientation="vertical"
+            android:padding="24dp">
 
-        <Button
-            android:id="@+id/toggleButton"
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="Pair this phone"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <EditText
+                android:id="@+id/addressInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Switch address"
+                android:inputType="textUri"
+                android:singleLine="true" />
+
+            <Button
+                android:id="@+id/findButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Find switch automatically" />
+
+            <EditText
+                android:id="@+id/pinInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="PIN"
+                android:inputType="numberPassword"
+                android:singleLine="true" />
+
+            <Button
+                android:id="@+id/pairButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Pair" />
+
+            <TextView
+                android:id="@+id/pairStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <!-- Paired mode -->
+        <LinearLayout
+            android:id="@+id/pairedGroup"
             android:layout_width="match_parent"
-            android:layout_height="80dp"
-            android:layout_marginTop="24dp"
-            android:enabled="false"
-            android:text="…"
-            android:textSize="20sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="40dp"
-            android:text="Settings"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="24dp"
+            android:visibility="gone">
 
-        <EditText
-            android:id="@+id/addressInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Switch address"
-            android:inputType="textUri"
-            android:singleLine="true" />
+            <View
+                android:id="@+id/statusDot"
+                android:layout_width="160dp"
+                android:layout_height="160dp"
+                android:layout_marginTop="24dp" />
 
-        <EditText
-            android:id="@+id/pinInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="PIN"
-            android:inputType="numberPassword"
-            android:singleLine="true" />
+            <TextView
+                android:id="@+id/statusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:gravity="center"
+                android:text="…"
+                android:textSize="24sp" />
 
-        <Button
-            android:id="@+id/saveButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Save" />
+            <TextView
+                android:id="@+id/viaText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:textSize="14sp" />
 
-        <Button
-            android:id="@+id/findButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Find switch automatically" />
-    </LinearLayout>
+            <Button
+                android:id="@+id/toggleButton"
+                android:layout_width="match_parent"
+                android:layout_height="80dp"
+                android:layout_marginTop="24dp"
+                android:enabled="false"
+                android:text="…"
+                android:textSize="20sp" />
+
+            <Button
+                android:id="@+id/unpairButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="40dp"
+                android:text="Unpair this phone" />
+        </LinearLayout>
+    </FrameLayout>
 </ScrollView>

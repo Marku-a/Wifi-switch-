@@ -1,6 +1,7 @@
 package com.marku.wifiswitch
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -11,19 +12,14 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
-
-    // Result of one HTTP call. code = -1 means the switch could not be reached.
-    private class ApiResult(val code: Int, val json: JSONObject?)
 
     private val colorGreen = Color.parseColor("#2E7D32")
     private val colorRed = Color.parseColor("#C62828")
@@ -33,16 +29,31 @@ class MainActivity : Activity() {
     private val executor = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
 
+    private lateinit var store: SecureStore
+    private lateinit var client: SwitchClient
+
+    private lateinit var unpairedGroup: View
+    private lateinit var pairedGroup: View
     private lateinit var statusDot: View
     private lateinit var statusText: TextView
+    private lateinit var viaText: TextView
     private lateinit var toggleButton: Button
+    private lateinit var unpairButton: Button
     private lateinit var addressInput: EditText
     private lateinit var pinInput: EditText
     private lateinit var findButton: Button
+    private lateinit var pairButton: Button
+    private lateinit var pairStatus: TextView
     private val dotDrawable = GradientDrawable()
 
-    private var inFlight = false
-    private var currentInternet: String? = null  // "on" / "off" / null when unknown
+    // Main-thread state
+    private var paired: Paired? = null
+    private var pollBusy = false
+    private var cmdBusy = false
+    private var pairing = false
+    private var failures = 0
+    private var lastState: SwitchState? = null  // always a verified state
+    private var lastViaRelay = false
     private var blinking = false
     private var blinkLow = false
 
@@ -54,7 +65,7 @@ class MainActivity : Activity() {
 
     private val pollRunnable = object : Runnable {
         override fun run() {
-            fetchStatus()
+            poll()
             handler.postDelayed(this, 5000)
         }
     }
@@ -73,101 +84,248 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE
+        )
         setContentView(R.layout.activity_main)
 
+        store = SecureStore(this)
+        client = SwitchClient(this, store)
+
+        unpairedGroup = findViewById(R.id.unpairedGroup)
+        pairedGroup = findViewById(R.id.pairedGroup)
         statusDot = findViewById(R.id.statusDot)
         statusText = findViewById(R.id.statusText)
+        viaText = findViewById(R.id.viaText)
         toggleButton = findViewById(R.id.toggleButton)
+        unpairButton = findViewById(R.id.unpairButton)
         addressInput = findViewById(R.id.addressInput)
         pinInput = findViewById(R.id.pinInput)
         findButton = findViewById(R.id.findButton)
-        val saveButton: Button = findViewById(R.id.saveButton)
+        pairButton = findViewById(R.id.pairButton)
+        pairStatus = findViewById(R.id.pairStatus)
 
         dotDrawable.shape = GradientDrawable.OVAL
         dotDrawable.setColor(colorGrey)
         statusDot.background = dotDrawable
 
-        addressInput.setText(address())
-        pinInput.setText(pin())
+        addressInput.setText(DEFAULT_ADDRESS)
 
-        saveButton.setOnClickListener {
-            saveSetting("address", addressInput.text.toString().trim().ifEmpty { DEFAULT_ADDRESS })
-            saveSetting("pin", pinInput.text.toString())
-            Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show()
-            fetchStatus()
-        }
         findButton.setOnClickListener { startDiscovery() }
+        pairButton.setOnClickListener { onPairClicked() }
         toggleButton.setOnClickListener { onToggleClicked() }
+        unpairButton.setOnClickListener { onUnpairClicked() }
+
+        client.relayListener = { s -> runOnUiThread { onRelayState(s) } }
+
+        if (store.isPaired()) paired = store.load()
+        if (paired != null) showPaired() else showUnpaired()
     }
 
     override fun onResume() {
         super.onResume()
-        handler.post(pollRunnable)
+        if (paired != null) handler.post(pollRunnable)
     }
 
     override fun onPause() {
         handler.removeCallbacks(pollRunnable)
         stopDiscovery(false)
+        executor.execute { client.disconnectRelay() }
         super.onPause()
     }
 
     override fun onDestroy() {
+        client.relayListener = null
         executor.shutdown()
         super.onDestroy()
     }
 
-    // ---------- settings ----------
+    // ---------- modes ----------
 
-    private fun prefs() = getSharedPreferences("settings", Context.MODE_PRIVATE)
-
-    private fun address(): String = prefs().getString("address", DEFAULT_ADDRESS) ?: DEFAULT_ADDRESS
-
-    private fun pin(): String = prefs().getString("pin", "") ?: ""
-
-    private fun saveSetting(key: String, value: String) {
-        prefs().edit().putString(key, value).apply()
+    private fun showUnpaired() {
+        paired = null
+        lastState = null
+        failures = 0
+        handler.removeCallbacks(pollRunnable)
+        setStatus(colorGrey, false, "…")
+        pairedGroup.visibility = View.GONE
+        unpairedGroup.visibility = View.VISIBLE
+        pairButton.isEnabled = true
+        pairStatus.text = ""
     }
 
-    // ---------- networking ----------
+    private fun showPaired() {
+        lastState = null
+        failures = 0
+        unpairedGroup.visibility = View.GONE
+        pairedGroup.visibility = View.VISIBLE
+        setStatus(colorGrey, false, "Checking…")
+        viaText.text = if (paired?.relayConfigured() == true) "" else "relay not set up"
+        toggleButton.text = "Turn internet ON"
+        toggleButton.isEnabled = false
+        handler.removeCallbacks(pollRunnable)
+        handler.post(pollRunnable)
+    }
 
-    private fun call(method: String, path: String, timeoutMs: Int): ApiResult {
-        var conn: HttpURLConnection? = null
-        try {
-            conn = URL("http://${address()}$path").openConnection() as HttpURLConnection
-            conn.requestMethod = method
-            conn.connectTimeout = timeoutMs
-            conn.readTimeout = timeoutMs
-            conn.setRequestProperty("X-Pin", pin())
-            val code = conn.responseCode
-            if (code == 401) return ApiResult(401, null)
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val body = stream?.bufferedReader()?.use { it.readText() } ?: ""
-            return ApiResult(code, JSONObject(body))
-        } catch (e: Exception) {
-            return ApiResult(-1, null)
-        } finally {
-            conn?.disconnect()
+    // ---------- pairing ----------
+
+    private fun onPairClicked() {
+        if (pairing) return
+        val address = addressInput.text.toString().trim().ifEmpty { DEFAULT_ADDRESS }
+        val pin = pinInput.text.toString()
+        pinInput.setText("")
+        if (pin.isEmpty()) {
+            pairStatus.text = "Enter the PIN"
+            return
         }
-    }
-
-    private fun fetchStatus() {
-        if (inFlight) return
+        pairing = true
+        pairButton.isEnabled = false
+        pairStatus.text = "Press the BOOT button on the switch now (30 s)…"
         executor.execute {
-            val result = call("GET", "/api/status", 5000)
-            runOnUiThread { if (!inFlight) render(result) }
+            val result = client.pair(address, pin)
+            runOnUiThread {
+                pairing = false
+                pinInput.setText("")
+                if (result.ok) {
+                    paired = store.load()
+                    if (paired != null) {
+                        showPaired()
+                    } else {
+                        pairButton.isEnabled = true
+                        pairStatus.text = "Could not read the stored pairing"
+                    }
+                } else {
+                    pairButton.isEnabled = true
+                    pairStatus.text = result.message
+                }
+            }
         }
+    }
+
+    // ---------- unpair ----------
+
+    private fun onUnpairClicked() {
+        AlertDialog.Builder(this)
+            .setTitle("Unpair this phone?")
+            .setMessage("This phone will no longer be able to control the switch.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Unpair") { _, _ -> doUnpair() }
+            .show()
+    }
+
+    private fun doUnpair() {
+        val p = paired ?: return
+        handler.removeCallbacks(pollRunnable)
+        cmdBusy = true
+        toggleButton.isEnabled = false
+        unpairButton.isEnabled = false
+        setStatus(colorYellow, false, "Unpairing…")
+        executor.execute {
+            try {
+                client.sendCommand(p, "unpair", "")  // best effort
+            } catch (e: Exception) {
+                // ignore
+            }
+            client.disconnectRelay()
+            store.clear()
+            runOnUiThread {
+                cmdBusy = false
+                unpairButton.isEnabled = true
+                showUnpaired()
+            }
+        }
+    }
+
+    // ---------- polling / commands ----------
+
+    private fun poll() {
+        val p = paired ?: return
+        if (pollBusy || cmdBusy) return
+        pollBusy = true
+        executor.execute {
+            val lan = client.state(p)
+            var relay: SwitchState? = null
+            if (lan.kind != Kind.OK && lan.kind != Kind.ERROR) {
+                relay = client.relayLatest(p)
+            }
+            runOnUiThread {
+                pollBusy = false
+                if (paired === p) onPollResult(p, lan, relay)
+            }
+        }
+    }
+
+    private fun onPollResult(p: Paired, lan: Reply, relay: SwitchState?) {
+        when (lan.kind) {
+            Kind.OK -> {
+                failures = 0
+                showState(lan.state, false)
+            }
+            Kind.ERROR -> {
+                failures = 0
+                lastState = null
+                showProblem("Switch error: ${lan.message}")
+            }
+            else -> {
+                failures++
+                if (relay != null) {
+                    showState(relay, true)
+                } else if (failures >= 3) {
+                    lastState = null
+                    showProblem(
+                        if (lan.kind == Kind.INVALID) "Reply from the switch could not be verified"
+                        else "Can't reach the switch. Are you on the home Wi-Fi?"
+                    )
+                }
+                // otherwise keep showing the last verified state
+            }
+        }
+    }
+
+    // Relay delivered a verified, fresh state; use it only while the LAN is failing.
+    private fun onRelayState(s: SwitchState) {
+        if (paired == null || failures == 0) return
+        showState(s, true)
     }
 
     private fun onToggleClicked() {
-        val target = if (currentInternet == "on") "off" else "on"
-        inFlight = true
+        val p = paired ?: return
+        val current = lastState ?: return
+        if (cmdBusy) return
+        val target = if (current.internet == "on") "off" else "on"
+        cmdBusy = true
         toggleButton.isEnabled = false
         setStatus(colorYellow, false, "Working…")
         executor.execute {
-            val result = call("POST", "/api/set?state=$target", 60000)
+            val r = client.sendCommand(p, "set", target)
             runOnUiThread {
-                inFlight = false
-                render(result)
+                cmdBusy = false
+                if (paired !== p) return@runOnUiThread
+                when (r.kind) {
+                    Kind.OK -> {
+                        failures = 0
+                        showState(r.state, false)
+                    }
+                    Kind.SENT -> {
+                        // The verified answer arrives through the relay subscription.
+                        failures = maxOf(failures, 1)
+                        setStatus(colorYellow, false, "Working…")
+                        viaText.text = "via remote relay"
+                    }
+                    Kind.ERROR -> {
+                        lastState = null
+                        showProblem("Switch error: ${r.message}")
+                    }
+                    Kind.INVALID -> {
+                        lastState = null
+                        showProblem("Reply from the switch could not be verified")
+                    }
+                    Kind.UNREACHABLE -> {
+                        lastState = null
+                        showProblem("Can't reach the switch. Are you on the home Wi-Fi?")
+                    }
+                }
             }
         }
     }
@@ -184,34 +342,31 @@ class MainActivity : Activity() {
         if (blink) handler.postDelayed(blinkRunnable, 500)
     }
 
-    private fun render(result: ApiResult) {
-        if (result.code == 401) {
-            currentInternet = null
-            setStatus(colorGrey, false, "Wrong PIN")
-            toggleButton.text = "Turn internet ON"
-            toggleButton.isEnabled = false
-            return
-        }
-        val json = result.json
-        if (result.code != 200 || json == null) {
-            currentInternet = null
-            setStatus(colorGrey, false, "Can't reach the switch. Are you on the home Wi-Fi?")
-            toggleButton.text = "Turn internet ON"
-            toggleButton.isEnabled = false
-            return
-        }
-        currentInternet = json.optString("internet", "")
-        when (json.optString("led", "")) {
+    private fun showProblem(text: String) {
+        setStatus(colorGrey, false, text)
+        toggleButton.text = "Turn internet ON"
+        toggleButton.isEnabled = false
+        viaText.text = if (paired?.relayConfigured() == true) "" else "relay not set up"
+    }
+
+    // Only called with verified states.
+    private fun showState(s: SwitchState?, viaRelay: Boolean) {
+        if (s == null) return
+        lastState = s
+        lastViaRelay = viaRelay
+        when (s.led) {
             "online" -> setStatus(colorGreen, false, "Internet is ON")
             "blocked" -> setStatus(colorRed, false, "Internet is OFF")
             "no_internet" ->
                 setStatus(colorRed, true, "Internet ON, but no connection from provider")
             "problem" -> setStatus(colorYellow, false, "Problem: switch can't control the router")
-            else -> setStatus(colorYellow, false, "Working…")
+            "busy" -> setStatus(colorYellow, false, "Working…")
+            else -> setStatus(colorGrey, false, "Status unknown")
         }
+        viaText.text = if (viaRelay) "via remote relay" else "via home Wi-Fi"
         toggleButton.text =
-            if (currentInternet == "on") "Turn internet OFF" else "Turn internet ON"
-        toggleButton.isEnabled = !inFlight
+            if (s.internet == "on") "Turn internet OFF" else "Turn internet ON"
+        toggleButton.isEnabled = !cmdBusy
     }
 
     // ---------- discovery ----------
@@ -273,15 +428,12 @@ class MainActivity : Activity() {
             }
 
             override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                val host = serviceInfo.host
-                val ip = host?.hostAddress
+                val ip = (serviceInfo.host as? java.net.Inet4Address)?.hostAddress
                 runOnUiThread {
                     if (ip != null && discoveryListener != null) {
-                        saveSetting("address", ip)
                         addressInput.setText(ip)
                         toast("Found switch at $ip")
                         stopDiscovery(false)
-                        fetchStatus()
                     } else {
                         resolving = false
                     }
