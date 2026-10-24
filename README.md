@@ -56,20 +56,32 @@ prompt in [`INSTALL_PROMPT.md`](INSTALL_PROMPT.md).
 
 On your phone, open this repo's **Releases** page and download the latest
 `WifiSwitch.apk`, then open it to install (allow "install unknown apps").
-In the app's settings enter the switch address (`wifiswitch.local`, or the ESP's
-IP from the serial log / the Mi WiFi app device list) and your `APP_PIN`, then
-Save, or tap **Find switch automatically**. It works while the phone is on the
-home Wi-Fi (put your phone on `ALLOWLIST_MACS` so it keeps internet while the
-switch is OFF; the app works on the LAN either way).
+**Pair the phone** (once per phone, phone on the home Wi-Fi):
 
-HTTP API (LAN only, PIN required via `X-Pin` header or `?pin=`):
+1. In the app enter the switch address (`wifiswitch.local`, or tap **Find switch
+   automatically**) and your `APP_PIN` (6+ digits), then tap **Pair**.
+2. The LED on the switch blinks **blue**. Press **BOOT** within 30 seconds.
+3. Done. The phone now holds its own key; it never sees your Wi-Fi or router
+   passwords. Up to 4 phones can be paired. 5 wrong PINs lock pairing for 10 min.
 
-```
-curl -H "X-Pin: 1234" http://wifiswitch.local/api/status
-curl -X POST -H "X-Pin: 1234" "http://wifiswitch.local/api/set?state=off"   # or state=on
-curl -X POST -H "X-Pin: 1234" http://wifiswitch.local/api/toggle
-# -> {"internet":"on","led":"online","router_ok":true,"ip":"192.168.31.50","version":1}
-```
+Put your phone on `ALLOWLIST_MACS` so it keeps internet while the switch is OFF.
+
+### Remote control from outside the house (optional)
+
+1. Create a free cluster at https://console.hivemq.cloud, then
+   **Access Management** and create a username/password. Copy the cluster URL
+   (like `xxxx.s1.eu.hivemq.cloud`).
+2. Put `MQTT_HOST`, `MQTT_USER` and `MQTT_PASS` in `include/secrets.h` and
+   re-flash.
+3. Pair your phones again so they receive the relay settings.
+
+The broker only carries signed messages; it cannot forge commands.
+
+### Reset
+
+Hold **BOOT** for 10 seconds: all paired phones are erased (LED blinks blue fast).
+
+Design and protocol details: [`docs/SECURITY.md`](docs/SECURITY.md).
 
 ## Notes / limits
 
