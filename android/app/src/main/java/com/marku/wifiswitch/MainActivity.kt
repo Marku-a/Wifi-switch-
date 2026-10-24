@@ -222,10 +222,15 @@ class MainActivity : Activity() {
         unpairButton.isEnabled = false
         setStatus(colorYellow, false, "Unpairing…")
         executor.execute {
-            try {
-                client.sendCommand(p, "unpair", "")  // best effort
-            } catch (e: Exception) {
-                // ignore
+            // Best effort, one retry: a lost challenge race (409) would otherwise
+            // leave this phone's slot occupied on the switch.
+            for (attempt in 0 until 2) {
+                val r = try {
+                    client.sendCommand(p, "unpair", "")
+                } catch (e: Exception) {
+                    null
+                }
+                if (r != null && r.kind != Kind.ERROR) break
             }
             client.disconnectRelay()
             store.clear()

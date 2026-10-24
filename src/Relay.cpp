@@ -44,6 +44,7 @@ void Relay::begin(const String& deviceId) {
   topicOnline = base + "/online";
   net.setCACert(kRelayRootCAs);
   net.setTimeout(5);  // seconds
+  net.setHandshakeTimeout(10);  // seconds; a stalled TLS handshake must not freeze loop()
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setBufferSize(1024);
   mqtt.setKeepAlive(60);

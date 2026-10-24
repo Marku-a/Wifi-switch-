@@ -18,6 +18,12 @@ or a compromised relay server cannot toggle the switch.
 | Someone pairs a new phone | Needs the PIN **and** a physical BOOT-button press on the switch within 30 s. 5 wrong PINs lock pairing for 10 min. |
 | Lost phone | Hold BOOT 10 s on the switch: all paired phones are erased. |
 
+Known limit of pairing: `pin_proof` lets someone who records a pairing on
+the LAN brute-force the PIN offline, and an active attacker on the LAN *during*
+a pairing could swap in their own key. The physical BOOT press is the real
+gate: only pair when you are holding the switch, and if a pairing fails
+unexpectedly, hold BOOT 10 s to reset and pair again.
+
 Not in scope: someone with physical access to the ESP32 can read its flash
 (Wi-Fi/router/broker passwords). Keep it somewhere the kids don't play with it.
 
@@ -91,7 +97,7 @@ JSON: `{"v":1,"internet":"on","led":"online","router_ok":true,"ts":<unix or 0>,"
 ## Relay transport (MQTT over TLS, port 8883)
 
 - Broker: any MQTT broker with a Let's Encrypt certificate, e.g. **HiveMQ Cloud** (free tier). Create one username/password.
-- Topics: `wifiswitch/<device_id>/cmd` (app → ESP, QoS 1, not retained) and `wifiswitch/<device_id>/state` (ESP → app, QoS 1, retained; `echo` = empty, `ts` = now).
+- Topics: `wifiswitch/<device_id>/cmd` (app → ESP, QoS 1, not retained) and `wifiswitch/<device_id>/state` (ESP → app, QoS 0 (PubSubClient limit), retained; `echo` = empty, `ts` = now).
 - ESP publishes state on every change, after every accepted command, and every 5 minutes.
 - Last-will on `wifiswitch/<device_id>/online` = `0` (retained), `1` after connect. Unsigned, used only as a hint.
 - The app uses the relay only when the LAN switch doesn't answer within 3 s, and rejects relayed status older than 15 minutes.
