@@ -52,6 +52,25 @@ in the Mi WiFi app. You can see it working there.
 Open Claude Code on the computer the ESP32 is plugged into and paste the
 prompt in [`INSTALL_PROMPT.md`](INSTALL_PROMPT.md).
 
+## Phone app (Android)
+
+On your phone, open this repo's **Releases** page and download the latest
+`WifiSwitch.apk`, then open it to install (allow "install unknown apps").
+In the app's settings enter the switch address (`wifiswitch.local`, or the ESP's
+IP from the serial log / the Mi WiFi app device list) and your `APP_PIN`, then
+Save, or tap **Find switch automatically**. It works while the phone is on the
+home Wi-Fi (put your phone on `ALLOWLIST_MACS` so it keeps internet while the
+switch is OFF; the app works on the LAN either way).
+
+HTTP API (LAN only, PIN required via `X-Pin` header or `?pin=`):
+
+```
+curl -H "X-Pin: 1234" http://wifiswitch.local/api/status
+curl -X POST -H "X-Pin: 1234" "http://wifiswitch.local/api/set?state=off"   # or state=on
+curl -X POST -H "X-Pin: 1234" http://wifiswitch.local/api/toggle
+# -> {"internet":"on","led":"online","router_ok":true,"ip":"192.168.31.50","version":1}
+```
+
 ## Notes / limits
 
 - The ESP32 only sees 2.4 GHz Wi-Fi. That's fine: the AX1800 has a 2.4 GHz band.

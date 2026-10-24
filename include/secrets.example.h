@@ -18,6 +18,9 @@
 // so the MAC stays the same.
 #define ALLOWLIST_MACS  ""   // e.g. "AA:BB:CC:DD:EE:01,AA:BB:CC:DD:EE:02"
 
+// PIN the phone app must send. Change it so kids can't toggle from their devices.
+#define APP_PIN  "1234"
+
 // Built-in RGB LED pin. ESP32-S3-DevKitC-1 v1.0 = 48, v1.1 = 38.
 #define RGB_LED_PIN     48
 #define LED_BRIGHTNESS  40   // 0..255

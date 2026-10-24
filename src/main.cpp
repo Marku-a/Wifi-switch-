@@ -13,6 +13,8 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include <ESPmDNS.h>
+#include <WebServer.h>
 #include <WiFi.h>
 #include <time.h>
 #include <vector>
@@ -21,6 +23,10 @@
 #include "secrets.h"
 #else
 #error "Missing include/secrets.h - copy include/secrets.example.h to include/secrets.h and fill it in."
+#endif
+
+#ifndef APP_PIN
+#error "Add APP_PIN to include/secrets.h (see secrets.example.h)"
 #endif
 
 #include "MiRouter.h"
@@ -44,6 +50,7 @@ volatile LedMode gLed = LedMode::Busy;
 
 MiRouter router(ROUTER_IP, ROUTER_ADMIN_PASSWORD);
 Preferences prefs;
+WebServer server(80);
 
 bool internetAllowed = true;        // desired state, persisted
 std::vector<String> blockedMacs;    // MACs we blocked, persisted so we can unblock them
@@ -128,6 +135,9 @@ bool connectWifi() {
   Serial.printf("[wifi] connected, ip=%s mac=%s\n", WiFi.localIP().toString().c_str(),
                 WiFi.macAddress().c_str());
   configTime(0, 0, "pool.ntp.org", "time.google.com");
+  MDNS.end();
+  MDNS.begin("wifiswitch");
+  MDNS.addService("http", "tcp", 80);
   return true;
 }
 
@@ -241,6 +251,81 @@ void updateStatus() {
   Serial.printf("[status] internet ON, %s\n", online ? "online" : "router has NO internet");
 }
 
+// Shared by the BOOT button and the HTTP API.
+void requestInternet(bool allowed) {
+  internetAllowed = allowed;
+  saveState();
+  Serial.printf("[switch] turning internet %s\n", internetAllowed ? "ON" : "OFF");
+  if (connectWifi()) applyDesiredState();
+  else routerProblem = true;  // retry once Wi-Fi is back
+  updateStatus();
+}
+
+// ---------- HTTP API ----------
+
+const char* ledName() {
+  switch (gLed) {
+    case LedMode::Online:     return "online";
+    case LedMode::Blocked:    return "blocked";
+    case LedMode::NoInternet: return "no_internet";
+    case LedMode::Problem:    return "problem";
+    case LedMode::Busy:       return "busy";
+  }
+  return "busy";
+}
+
+String statusJson() {
+  String j = "{\"internet\":\"";
+  j += internetAllowed ? "on" : "off";
+  j += "\",\"led\":\"";
+  j += ledName();
+  j += "\",\"router_ok\":";
+  j += routerProblem ? "false" : "true";
+  j += ",\"ip\":\"";
+  j += WiFi.localIP().toString();
+  j += "\",\"version\":1}";
+  return j;
+}
+
+void sendJson(int code, const String& body) {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(code, "application/json", body);
+}
+
+bool pinOk() {
+  String pin;
+  if (server.hasHeader("X-Pin")) pin = server.header("X-Pin");
+  else if (server.hasArg("pin")) pin = server.arg("pin");
+  return pin == APP_PIN;
+}
+
+void handleApi() {
+  if (!pinOk()) {
+    sendJson(401, "{\"error\":\"bad pin\"}");
+    return;
+  }
+  String uri = server.uri();
+  HTTPMethod method = server.method();
+  if (uri == "/api/status" && method == HTTP_GET) {
+    sendJson(200, statusJson());
+  } else if (uri == "/api/set" && method == HTTP_POST) {
+    String state = server.arg("state");
+    if (state != "on" && state != "off") {
+      sendJson(400, "{\"error\":\"state must be on or off\"}");
+      return;
+    }
+    Serial.println("[api] set");
+    requestInternet(state == "on");
+    sendJson(200, statusJson());
+  } else if (uri == "/api/toggle" && method == HTTP_POST) {
+    Serial.println("[api] toggle");
+    requestInternet(!internetAllowed);
+    sendJson(200, statusJson());
+  } else {
+    sendJson(404, "{\"error\":\"not found\"}");
+  }
+}
+
 // ---------- button ----------
 
 bool buttonPressed() {
@@ -279,16 +364,19 @@ void setup() {
     routerProblem = true;  // re-sync once Wi-Fi is back
   }
   updateStatus();
+
+  server.onNotFound(handleApi);
+  const char* hdrs[] = {"X-Pin"};
+  server.collectHeaders(hdrs, 1);
+  server.begin();
 }
 
 void loop() {
+  server.handleClient();
+
   if (buttonPressed()) {
-    internetAllowed = !internetAllowed;
-    saveState();
-    Serial.printf("[button] turning internet %s\n", internetAllowed ? "ON" : "OFF");
-    if (connectWifi()) applyDesiredState();
-    else routerProblem = true;  // retry once Wi-Fi is back
-    updateStatus();
+    Serial.println("[button] pressed");
+    requestInternet(!internetAllowed);
   }
 
   if (WiFi.status() != WL_CONNECTED) {

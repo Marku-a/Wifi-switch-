@@ -17,8 +17,8 @@ is plugged into this computer.
    install it from python.org, and don't use any other source.
 3. Copy `include/secrets.example.h` to `include/secrets.h`. Ask me, in ONE
    message, for: my Wi-Fi name, my Wi-Fi password, my Mi router admin
-   password, and the MAC addresses of devices that must never be blocked
-   (I can skip that). Fill them in. Never print the passwords back,
+   password, a 4–8 digit PIN for the phone app (`APP_PIN`), and the MAC
+   addresses of devices that must never be blocked (I can skip that). Fill them in. Never print the passwords back,
    never commit `secrets.h`.
 4. Find the ESP32's serial port (`pio device list`). On Windows, if no port
    appears, tell me to install the USB driver (CP210x from silabs.com or
@@ -27,6 +27,7 @@ is plugged into this computer.
    BOOT, tap RESET, release BOOT, and retry.
 6. Run `pio device monitor` for about 60 seconds and explain the log to me:
    did it join Wi-Fi, log in to the router, and what colour the LED should be?
+   Also report the ESP's IP address from the log so I can type it into the app.
    If you see "login rejected", the router admin password is wrong; ask me
    again. If the LED doesn't light up, change `RGB_LED_PIN` to 38 and re-flash.
 7. Finally, tell me to press the BOOT button once (LED should turn red and a
