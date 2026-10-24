@@ -171,6 +171,10 @@ uint32_t MiRouter::unixTime() {
 bool MiRouter::detectEncryption() {
   Response r;
   if (!request("GET", "/cgi-bin/luci/web", "", r, 131072)) return false;
+  if (r.status != 200) {
+    _error = "login page returned HTTP " + String(r.status);
+    return false;
+  }
 
   int m = r.body.indexOf("newEncryptMode");
   if (m >= 0) {
@@ -232,6 +236,10 @@ bool MiRouter::login() {
     String code = r.body.substring(0, 120);
     code.trim();
     _error = "login rejected (wrong admin password?) reply: " + code;
+    // The login page may have been misread; detect the hash mode again next time.
+    _encryptionKnown = false;
+    _sha256 = false;
+    _key = kDefaultKey;
     return false;
   }
   _token = token;

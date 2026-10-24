@@ -275,6 +275,8 @@ void setup() {
 
   if (connectWifi()) {
     applyDesiredState();  // re-sync the router with the saved state
+  } else {
+    routerProblem = true;  // re-sync once Wi-Fi is back
   }
   updateStatus();
 }
@@ -285,6 +287,7 @@ void loop() {
     saveState();
     Serial.printf("[button] turning internet %s\n", internetAllowed ? "ON" : "OFF");
     if (connectWifi()) applyDesiredState();
+    else routerProblem = true;  // retry once Wi-Fi is back
     updateStatus();
   }
 
@@ -292,6 +295,7 @@ void loop() {
     gLed = LedMode::Problem;
     if (millis() - lastStatusMs > kStatusIntervalMs) {
       if (connectWifi()) applyDesiredState();
+      else routerProblem = true;  // retry once Wi-Fi is back
       updateStatus();
     }
   } else {
