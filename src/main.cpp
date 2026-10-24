@@ -255,7 +255,8 @@ void handleButton() {
       }
     }
   }
-  refreshFromRouter();  // show what the router really says
+  internetOn = !turnOff;  // so the refresh below doesn't block new devices after turning ON
+  refreshFromRouter();    // show what the router really says
   saveState();
 }
 
