@@ -16,7 +16,7 @@ is plugged into this computer.
    official source). Python 3 is required; if it's missing, tell me how to
    install it from python.org, and don't use any other source.
 3. Copy `include/secrets.example.h` to `include/secrets.h`. Ask me, in ONE
-   message, for: my Wi-Fi name, my Wi-Fi password, my Mi router admin
+   message, for: my Wi-Fi name (the 2.4 GHz one, not the "5G" one), my Wi-Fi password, my Mi router admin
    password, and the MAC addresses of devices that must never be blocked
    (I can skip that). Fill them in. Never print the passwords back,
    never commit `secrets.h`.
@@ -31,3 +31,6 @@ is plugged into this computer.
    again. If the LED doesn't light up, change `RGB_LED_PIN` to 38 and re-flash.
 7. Finally, tell me to press the BOOT button once (LED should turn red and a
    phone on Wi-Fi should lose internet), then again (LED back to green).
+   Ask me to confirm in the Mi WiFi app that the devices showed "Internet
+   access" off after the first press. If the log never shows devices being
+   blocked or the LED doesn't change, read the log with me and fix it.
