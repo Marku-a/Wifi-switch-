@@ -13,8 +13,13 @@ public:
   bool login();
   bool loggedIn() const { return _token.length() > 0; }
 
-  // MACs (upper-case, AA:BB:CC:DD:EE:FF) of devices the router currently knows.
-  bool listDevices(std::vector<String>& macs);
+  struct Device {
+    String mac;  // upper-case, AA:BB:CC:DD:EE:FF
+    int wan;     // 1 internet allowed, 0 blocked, -1 unknown
+  };
+
+  // Devices the router currently knows, with their internet (WAN) permission.
+  bool listDevices(std::vector<Device>& out);
 
   // Allow / block internet (WAN) access for one device. LAN/Wi-Fi stay up.
   bool setInternetAccess(const String& mac, bool allow);

@@ -246,8 +246,8 @@ bool MiRouter::login() {
   return true;
 }
 
-bool MiRouter::listDevices(std::vector<String>& macs) {
-  macs.clear();
+bool MiRouter::listDevices(std::vector<Device>& out) {
+  out.clear();
   if (!loggedIn() && !login()) return false;
   Response r;
   if (!request("GET", "/cgi-bin/luci/;stok=" + _token + "/api/misystem/devicelist", "", r,
@@ -267,9 +267,26 @@ bool MiRouter::listDevices(std::vector<String>& macs) {
     from = i + 5;
     mac.toUpperCase();
     if (mac.length() != 17) continue;
+
+    // "wan" must be inside this list entry: before the next "mac" (or end of body).
+    int next = r.body.indexOf("\"mac\"", from);
+    int wan = -1;
+    int w = r.body.indexOf("\"wan\"", i);
+    if (w >= 0 && (next < 0 || w < next)) {
+      int colon = r.body.indexOf(':', w + 5);
+      if (colon >= 0 && (next < 0 || colon < next)) {
+        int p = colon + 1;
+        while (p < (int)r.body.length() && (r.body[p] == ' ' || r.body[p] == '"')) p++;
+        if (p < (int)r.body.length()) {
+          if (r.body[p] == '0') wan = 0;
+          else if (r.body[p] == '1') wan = 1;
+        }
+      }
+    }
+
     bool dup = false;
-    for (auto& m : macs) dup |= (m == mac);
-    if (!dup) macs.push_back(mac);
+    for (auto& d : out) dup |= (d.mac == mac);
+    if (!dup) out.push_back(Device{mac, wan});
   }
   return true;
 }

@@ -2,8 +2,6 @@ name: Build firmware
 
 on:
   push:
-    paths-ignore:
-      - 'android/**'
   pull_request:
   workflow_dispatch:
 

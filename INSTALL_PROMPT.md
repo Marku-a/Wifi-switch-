@@ -17,10 +17,8 @@ is plugged into this computer.
    install it from python.org, and don't use any other source.
 3. Copy `include/secrets.example.h` to `include/secrets.h`. Ask me, in ONE
    message, for: my Wi-Fi name, my Wi-Fi password, my Mi router admin
-   password, a PIN of 6 or more digits for pairing phones (`APP_PIN`), the MAC
-   addresses of devices that must never be blocked (I can skip that), and
-   optionally my MQTT relay host, username and password (`MQTT_HOST`,
-   `MQTT_USER`, `MQTT_PASS`; I can skip these for home-only use). Fill them in. Never print the passwords back,
+   password, and the MAC addresses of devices that must never be blocked
+   (I can skip that). Fill them in. Never print the passwords back,
    never commit `secrets.h`.
 4. Find the ESP32's serial port (`pio device list`). On Windows, if no port
    appears, tell me to install the USB driver (CP210x from silabs.com or
@@ -29,9 +27,7 @@ is plugged into this computer.
    BOOT, tap RESET, release BOOT, and retry.
 6. Run `pio device monitor` for about 60 seconds and explain the log to me:
    did it join Wi-Fi, log in to the router, and what colour the LED should be?
-   Also report the ESP's IP address from the log so I can type it into the app.
    If you see "login rejected", the router admin password is wrong; ask me
    again. If the LED doesn't light up, change `RGB_LED_PIN` to 38 and re-flash.
 7. Finally, tell me to press the BOOT button once (LED should turn red and a
-   phone on Wi-Fi should lose internet), then again (LED back to green). Then tell me to open the app, enter the PIN,
-   tap Pair, and press BOOT when the LED blinks blue.
+   phone on Wi-Fi should lose internet), then again (LED back to green).

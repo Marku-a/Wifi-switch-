@@ -14,7 +14,7 @@ turn it back on.
 | LED | Meaning |
 |-----|---------|
 | 🟢 green | Internet is ON and working |
-| 🔴 red, solid | Internet is OFF (you switched it off) |
+| 🔴 red, solid | Internet is OFF: every device is blocked (green again as soon as any device is unblocked) |
 | 🔴 red, blinking | Internet is ON, but the router has no internet (ISP/modem problem) |
 | 🟡 yellow, solid | Problem: can't join Wi-Fi, router is off, or the router admin password is wrong |
 | 🟡 yellow, blinking | Working: starting up or applying a change |
@@ -23,15 +23,33 @@ turn it back on.
 
 1. On power-up it joins your Wi-Fi and logs in to the router's local admin API
    (`http://192.168.31.1`), the same API the Mi WiFi web page uses.
-2. It restores the last state (ON/OFF is saved, so it survives unplugging).
-3. When OFF it calls `xqsystem/set_mac_filter?wan=0` for every connected
-   device. Every minute it re-checks, so a device that joins later gets blocked too.
-4. When ON it un-blocks every device it blocked (`wan=1`).
-5. Every 30 s it checks the router and the internet
+2. The router is the source of truth. The ESP32 stores no ON/OFF state; it reads
+   each device's "Internet access" flag from the router every 30 s. The button
+   and the Mi WiFi app never fight each other.
+3. Button press: if any device has internet, it blocks every device
+   (`xqsystem/set_mac_filter?wan=0`). If all are blocked, it un-blocks them
+   (`wan=1`), including devices it blocked earlier that are now offline.
+4. While everything is OFF, a brand-new device that joins gets blocked too.
+   A device you unblock in the Mi WiFi app is respected and left alone.
+5. Every 30 s it also checks the internet
    (`connectivitycheck.gstatic.com/generate_204`) and updates the LED.
 
 Blocking is per device, the same as the **"Internet access"** toggle per device
 in the Mi WiFi app. You can see it working there.
+
+## Turn it off from outside the house (Mi WiFi app)
+
+1. Install the official **Mi WiFi** app (Google Play / App Store, publisher
+   Xiaomi) and sign in with the Xiaomi account the router is bound to. The app
+   shows the router when you're away only if it was bound in the app, so do
+   this once at home: Mi WiFi app, add/bind router.
+2. Turn internet OFF for a device: open the app, go to **Devices** (device
+   list), tap the device, and switch **Internet access** (may be called
+   "Network access") off. Repeat for each kid's device.
+3. Turn it back ON the same way. The ESP32's LED shows green as soon as any
+   device is unblocked, and red when all are blocked (updates within 30 s).
+4. Tip: give kids' devices recognisable names in the app (tap device, rename)
+   so they're easy to find. Labels can differ slightly between app versions.
 
 ## Setup
 
@@ -51,37 +69,6 @@ in the Mi WiFi app. You can see it working there.
 
 Open Claude Code on the computer the ESP32 is plugged into and paste the
 prompt in [`INSTALL_PROMPT.md`](INSTALL_PROMPT.md).
-
-## Phone app (Android)
-
-On your phone, open this repo's **Releases** page and download the latest
-`WifiSwitch.apk`, then open it to install (allow "install unknown apps").
-**Pair the phone** (once per phone, phone on the home Wi-Fi):
-
-1. In the app enter the switch address (`wifiswitch.local`, or tap **Find switch
-   automatically**) and your `APP_PIN` (6+ digits), then tap **Pair**.
-2. The LED on the switch blinks **blue**. Press **BOOT** within 30 seconds.
-3. Done. The phone now holds its own key; it never sees your Wi-Fi or router
-   passwords. Up to 4 phones can be paired. 5 wrong PINs lock pairing for 10 min.
-
-Put your phone on `ALLOWLIST_MACS` so it keeps internet while the switch is OFF.
-
-### Remote control from outside the house (optional)
-
-1. Create a free cluster at https://console.hivemq.cloud, then
-   **Access Management** and create a username/password. Copy the cluster URL
-   (like `xxxx.s1.eu.hivemq.cloud`).
-2. Put `MQTT_HOST`, `MQTT_USER` and `MQTT_PASS` in `include/secrets.h` and
-   re-flash.
-3. Pair your phones again so they receive the relay settings.
-
-The broker only carries signed messages; it cannot forge commands.
-
-### Reset
-
-Hold **BOOT** for 10 seconds: all paired phones are erased (LED blinks blue fast).
-
-Design and protocol details: [`docs/SECURITY.md`](docs/SECURITY.md).
 
 ## Notes / limits
 

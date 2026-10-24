@@ -18,17 +18,6 @@
 // so the MAC stays the same.
 #define ALLOWLIST_MACS  ""   // e.g. "AA:BB:CC:DD:EE:01,AA:BB:CC:DD:EE:02"
 
-// PIN needed to pair a new phone (use 6+ digits). Pairing also requires pressing BOOT on the switch.
-#define APP_PIN  "123456"
-
-// Optional internet relay so the phone can control the switch from outside the house.
-// Leave MQTT_HOST empty to disable (home Wi-Fi only). Example host: "xxxx.s1.eu.hivemq.cloud".
-// See docs/SECURITY.md and README.md ("Remote control from outside the house").
-#define MQTT_HOST  ""
-#define MQTT_PORT  8883
-#define MQTT_USER  ""
-#define MQTT_PASS  ""
-
 // Built-in RGB LED pin. ESP32-S3-DevKitC-1 v1.0 = 48, v1.1 = 38.
 #define RGB_LED_PIN     48
 #define LED_BRIGHTNESS  40   // 0..255
